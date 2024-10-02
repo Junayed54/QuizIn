@@ -93,7 +93,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',  # Use 'mysql' for MySQL
         'NAME': 'quizIn',              # Your database name
         'USER': 'root',                       # Your MySQL username
-        'PASSWORD': '',             # Your MySQL password
+        'PASSWORD': 'root123',             # Your MySQL password
         'HOST': 'localhost',                    # Your database host
         'PORT': '3306',                         # Default MySQL port
     }
