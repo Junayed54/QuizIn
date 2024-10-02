@@ -91,9 +91,9 @@ WSGI_APPLICATION = 'quizIn.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',  # Use 'mysql' for MySQL
-        'NAME': 'quizIn_database',              # Your database name
-        'USER': 'quizIn',                       # Your MySQL username
-        'PASSWORD': 'Bridgers@123',             # Your MySQL password
+        'NAME': 'quizIn',              # Your database name
+        'USER': 'root',                       # Your MySQL username
+        'PASSWORD': '',             # Your MySQL password
         'HOST': 'localhost',                    # Your database host
         'PORT': '3306',                         # Default MySQL port
     }
