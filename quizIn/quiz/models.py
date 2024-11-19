@@ -1,91 +1,45 @@
 from django.db import models
-from django.conf import settings
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
-
-class ExamType(models.Model):
-    TYPE_CHOICES = [
-        ('preliminary', 'Preliminary Test'),
-        ('intermediary', 'Intermediary Test'),
-        ('reward', 'Reward Test'),
-    ]
-    name = models.CharField(max_length=50, choices=TYPE_CHOICES, unique=True)
-    total_questions = models.IntegerField()  # Number of questions for this exam type
-    marks_per_question = models.IntegerField(null=True, blank=True)  # Marks per question (e.g., 1 for Preliminary, 2 for Intermediary)
-    points_multiplier = models.FloatField(default=1.0)  # Multiplier for points (e.g., 1 for Preliminary, 2 for Intermediary)
+class Event(models.Model):
+    name = models.CharField(max_length=350, unique=True)
+    total_questions = models.IntegerField()
+    marks_per_question = models.IntegerField(null=True, blank=True)
+    points_multiplier = models.FloatField(null=True, blank=True)
+    negative_marks = models.FloatField(null=True, blank=True)
+    duration = models.IntegerField(null=True, blank=True)
+    start_time = models.DateTimeField(null=True, blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.name} (Questions: {self.total_questions}, Points Multiplier: {self.points_multiplier})"
 
 
-class UserExam(models.Model):
-    """Tracks each user's attempt at a specific exam type."""
+class UserEvent(models.Model):
+    """Tracks each user's attempt at a specific event type."""
     msisdn = models.CharField(max_length=15, default=None)
-    exam_type = models.ForeignKey(ExamType, on_delete=models.CASCADE, related_name='user_exams')
-    score = models.IntegerField(default=0)  # Score for this attempt
-    points_earned = models.IntegerField(default=0)  # Points earned for this attempt
-    is_completed = models.BooleanField(default=False)  # Whether the user completed the exam
-    timestamp = models.DateTimeField(auto_now=True)  # When the exam was taken
-
-    # class Meta:
-    #     unique_together = ('msisdn', 'exam_type')  # Each user can take each exam type once
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='user_exams')
+    score = models.IntegerField(default=0)
+    points_earned = models.IntegerField(default=0)
+    is_completed = models.BooleanField(default=False)
+    start_time = models.DateTimeField(null=True, blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        return f"{self.msisdn} - {self.exam_type.name} - Score: {self.score}"
+        return f"{self.msisdn} - {self.event.name} - Score: {self.score}"
 
     def calculate_points(self):
-        """Calculate points based on score and exam type's points multiplier."""
-        self.points_earned = int(self.score * self.exam_type.points_multiplier)
+        """Calculate points based on score and event's points multiplier."""
+        self.points_earned = int(self.score * self.event.points_multiplier)
         self.save()
-
-        # Update user's total points in the PointsTable
         PointsTable.update_user_points(self.msisdn, self.points_earned)
 
 
-class PointsTable(models.Model):
-    """Keeps track of total points for each user."""
-    msisdn = models.CharField(max_length=15) 
-    total_points = models.IntegerField(default=0)
-
-    def __str__(self):
-        return f"{self.msisdn} - Total Points: {self.total_points}"
-
-    @staticmethod
-    def update_user_points(msisdn, points_earned):
-        """Update total points for the user."""
-        points_entry, created = PointsTable.objects.get_or_create(msisdn=msisdn)
-        points_entry.total_points += points_earned
-        points_entry.save()
-
-
-class Leaderboard(models.Model):
-    """Leaderboard based on total points."""
-    msisdn = models.CharField(max_length=15)
-    exam_type = models.ForeignKey(ExamType, on_delete=models.CASCADE, related_name='leaderboards')
-    score = models.IntegerField(default=0)
-
-    class Meta:
-        ordering = ['-score']  # Order by score descending
-
-    def __str__(self):
-        return f'{self.msisdn} - {self.score}'
-
-    @staticmethod
-    def update_best_score(msisdn, exam_type, score):
-        print("score:", score)
-        """Update the leaderboard with the user's best score."""
-        leaderboard_entry, created = Leaderboard.objects.get_or_create(msisdn=msisdn, exam_type=exam_type)
-        
-        if leaderboard_entry.score < score:
-            leaderboard_entry.score = score
-            leaderboard_entry.save()
-
-
-
-    
 class Subject(models.Model):
     """Represents a subject like English, General Knowledge, etc."""
     name = models.CharField(max_length=255, unique=True)
@@ -102,7 +56,7 @@ class Section(models.Model):
     description = models.TextField(blank=True, null=True)
 
     class Meta:
-        unique_together = ('name', 'subject')  # Ensure section names are unique within a subject.
+        unique_together = ('name', 'subject')  # Ensures section names are unique within a subject.
 
     def __str__(self):
         return f"{self.name} - {self.subject.name}"
@@ -115,11 +69,10 @@ class Category(models.Model):
     description = models.TextField(blank=True, null=True)
 
     class Meta:
-        unique_together = ('name', 'section')  # Ensure categories are unique within a section.
+        unique_together = ('name', 'section')  # Ensures categories are unique within a section.
 
     def __str__(self):
         return f"{self.name} - {self.section.name}"
-
 
 
 class Question(models.Model):
@@ -131,16 +84,19 @@ class Question(models.Model):
         (5, 'Very Hard'),
         (6, 'Expert'),
     ]
-    
+
     text = models.CharField(max_length=255, unique=True)
+    event = models.ForeignKey(Event, related_name='questions', on_delete=models.SET_NULL, null=True, blank=True)
     marks = models.IntegerField()
     category = models.ForeignKey(Category, related_name='questions', on_delete=models.CASCADE)
     difficulty = models.IntegerField(choices=DIFFICULTY_LEVEL_CHOICES, default=3)
+
     def get_options(self):
         return self.options.all()
 
     def __str__(self):
-        return f"{self.text}"
+        return self.text
+
 
 class QuestionOption(models.Model):
     question = models.ForeignKey(Question, related_name='options', on_delete=models.CASCADE)
@@ -150,3 +106,84 @@ class QuestionOption(models.Model):
     def __str__(self):
         return self.text
 
+
+STAGE_CHOICES = [
+    ('preliminary', 'Preliminary'),
+    ('intermediary', 'Intermediary'),
+    ('reward', 'Reward'),
+]
+
+class Status(models.Model):
+    """Defines the status levels for users, including points, question limits, and difficulty ranges."""
+    status = models.CharField(max_length=15, choices=STAGE_CHOICES, unique=True, help_text="Stage type")    
+    questions_limit = models.IntegerField(help_text="Number of questions a user will receive at this status level")
+    # question_difficulty_levels = models.ManyToManyField(
+    #     'Question', 
+    #     limit_choices_to={'difficulty__in': dict(Question.DIFFICULTY_LEVEL_CHOICES).keys()},
+    #     related_name="statuses",
+    #     help_text="Allowed difficulty levels for this status"
+    # )
+    correct_answer_points = models.IntegerField(help_text="Points awarded for each correct answer")
+    negative_points = models.IntegerField(default=0, help_text="Points deducted for each incorrect answer")
+    points_required_to_advance = models.IntegerField(help_text="Points required to move to the next status")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.status} - Questions Limit: {self.questions_limit}"
+
+
+class UserStatus(models.Model):
+    """Tracks the user's progression through the stages, points, and status."""
+    msisdn = models.CharField(max_length=15, unique=True)
+    current_status = models.ForeignKey(Status, on_delete=models.CASCADE, help_text="Current status of the user")
+    points = models.IntegerField(default=0, help_text="Total points earned by the user")
+    total_questions_attempted = models.IntegerField(default=0, help_text="Total questions the user has attempted")
+    status_update_date = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.msisdn} - {self.current_status.status.capitalize()} - Points: {self.points}"
+
+    def add_points(self, is_correct):
+        """Updates points based on answer correctness and applies negative or positive scoring."""
+        if is_correct:
+            self.points += self.current_status.correct_answer_points
+        else:
+            self.points -= self.current_status.negative_points
+
+        self.total_questions_attempted += 1
+        self.save()
+        self.check_for_status_update()
+
+    def check_for_status_update(self):
+        """Checks if the user has enough points to move to the next stage and updates the status."""
+        if self.points >= self.current_status.points_required_to_advance:
+            next_status = Status.objects.filter(points_required_to_advance__gt=self.current_status.points_required_to_advance).order_by('points_required_to_advance').first()
+            if next_status:
+                self.current_status = next_status
+                self.save()
+
+
+
+
+class Leaderboard(models.Model):
+    """Leaderboard based on total points."""
+    msisdn = models.CharField(max_length=15)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='leaderboards', null=True, blank=True, help_text="Associated event.")
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='leaderboards', null=True, blank=True, help_text="Associated category.")
+    score = models.IntegerField(default=0)
+    status = models.ForeignKey(Status, on_delete=models.SET_NULL, null=True, blank=True, related_name='leaderboards', help_text="User's current status.")
+
+    class Meta: ordering = ['-score']
+
+    def __str__(self): return f'{self.msisdn} - {self.score}'
+
+    @staticmethod
+    def update_best_score(msisdn, score, category=None, event=None, status=None):
+        if not category and not event: raise ValueError("Either 'category' or 'event' must be specified.")
+        leaderboard_entry, created = Leaderboard.objects.get_or_create(
+            msisdn=msisdn, category=category if category else None, event=event if event else None, status=status, defaults={'score': score}
+        )
+        if leaderboard_entry.score < score: leaderboard_entry.score = score; leaderboard_entry.save()

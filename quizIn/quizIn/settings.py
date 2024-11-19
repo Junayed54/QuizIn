@@ -23,9 +23,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-x)icq+xza7x6z39q1_6@5%k$rn$ule^urz^4#58-9vby9-u7v8'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
-ALLOWED_HOSTS = ['217.76.63.211', 'localhost']
+ALLOWED_HOSTS = ['217.76.63.211', 'localhost', '127.0.0.1']
 
 
 AUTH_USER_MODEL = 'user.CustomUser'
@@ -98,6 +98,22 @@ DATABASES = {
 #         'PORT': '3306',                         # Default MySQL port
 #     }
 # }
+
+
+
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': 'redis://127.0.0.1:6379/1',  # Adjust the URL based on your Redis setup
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        }
+    }
+}
+
+# Cache timeout (optional)
+COOLDOWN_CACHE_TIMEOUT = 60 * 60 * 24
 
 
 # Password validation

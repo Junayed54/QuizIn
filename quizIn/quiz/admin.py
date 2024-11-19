@@ -1,53 +1,79 @@
 from django.contrib import admin
-from .models import ExamType, UserExam, PointsTable, Leaderboard, Subject, Section, Category, Question, QuestionOption
-
-@admin.register(ExamType)
-class ExamTypeAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'total_questions', 'marks_per_question', 'points_multiplier')
-    search_fields = ('name',)
-
-@admin.register(UserExam)
-class UserExamAdmin(admin.ModelAdmin):
-    list_display = ('id', 'msisdn', 'exam_type', 'score', 'points_earned', 'is_completed', 'timestamp')
-    list_filter = ('exam_type', 'is_completed')
-    search_fields = ('msisdn',)
-
-@admin.register(PointsTable)
-class PointsTableAdmin(admin.ModelAdmin):
-    list_display = ('id', 'msisdn', 'total_points')
-    search_fields = ('msisdn',)
-
-@admin.register(Leaderboard)
-class LeaderboardAdmin(admin.ModelAdmin):
-    list_display = ('msisdn', 'exam_type', 'score')
-    list_filter = ('exam_type',)
-    search_fields = ('msisdn',)
+from .models import (
+    Subject, Section, Category, Question, QuestionOption, Status,
+    UserStatus, Event, UserEvent, Leaderboard
+)
 
 @admin.register(Subject)
 class SubjectAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name',)
+    list_display = ('id', 'name', 'description')
     search_fields = ('name',)
+
 
 @admin.register(Section)
 class SectionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'subject')
+    list_display = ('id', 'name', 'subject', 'description')
+    search_fields = ('name', 'subject__name')
     list_filter = ('subject',)
-    search_fields = ('name',)
+
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'section')
+    list_display = ('id', 'name', 'section', 'description')
+    search_fields = ('name', 'section__name')
     list_filter = ('section',)
-    search_fields = ('name',)
+
+
+class QuestionOptionInline(admin.TabularInline):
+    model = QuestionOption
+    extra = 1
+
 
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'text', 'marks', 'category', 'difficulty')
-    list_filter = ('category', 'difficulty')
+    list_display = ('id', 'text', 'marks', 'category', 'difficulty', 'event')
     search_fields = ('text',)
+    list_filter = ('category', 'difficulty')
+    inlines = [QuestionOptionInline]
+
 
 @admin.register(QuestionOption)
 class QuestionOptionAdmin(admin.ModelAdmin):
     list_display = ('id', 'question', 'text', 'is_correct')
-    list_filter = ('question', 'is_correct')
-    search_fields = ('text',)
+    list_filter = ('is_correct',)
+    search_fields = ('text', 'question__text')
+
+
+@admin.register(Status)
+class StatusAdmin(admin.ModelAdmin):
+    list_display = ('id', 'status', 'questions_limit', 'correct_answer_points', 'negative_points', 'points_required_to_advance')
+    list_filter = ('status',)
+    search_fields = ('status',)
+
+
+@admin.register(UserStatus)
+class UserStatusAdmin(admin.ModelAdmin):
+    list_display = ('id', 'msisdn', 'current_status', 'points', 'total_questions_attempted', 'status_update_date')
+    search_fields = ('msisdn',)
+    list_filter = ('current_status',)
+
+
+@admin.register(Event)
+class EventAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'total_questions', 'marks_per_question', 'points_multiplier', 'start_time', 'end_time')
+    search_fields = ('name',)
+    list_filter = ('start_time', 'end_time')
+
+
+@admin.register(UserEvent)
+class UserEventAdmin(admin.ModelAdmin):
+    list_display = ('id', 'msisdn', 'event', 'score', 'points_earned', 'is_completed', 'start_time', 'end_time')
+    search_fields = ('msisdn', 'event__name')
+    list_filter = ('is_completed', 'event')
+
+
+@admin.register(Leaderboard)
+class LeaderboardAdmin(admin.ModelAdmin):
+    list_display = ('id', 'msisdn', 'event', 'score')
+    search_fields = ('msisdn', 'event__name')
+    list_filter = ('event',)
