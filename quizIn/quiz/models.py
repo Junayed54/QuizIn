@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 class Event(models.Model):
-    name = models.CharField(max_length=350, unique=True)
+    name = models.CharField(max_length=250, unique=True)
     total_questions = models.IntegerField()
     marks_per_question = models.IntegerField(null=True, blank=True)
     points_multiplier = models.FloatField(null=True, blank=True)
