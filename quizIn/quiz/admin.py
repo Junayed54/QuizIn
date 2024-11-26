@@ -40,7 +40,7 @@ class QuestionAdmin(admin.ModelAdmin):
 @admin.register(QuestionOption)
 class QuestionOptionAdmin(admin.ModelAdmin):
     list_display = ('id', 'question', 'text', 'is_correct')
-    list_filter = ('is_correct',)
+    # list_filter = ('is_correct',)
     search_fields = ('text', 'question__text')
 
 

@@ -28,48 +28,55 @@ from random import sample
 
 
 
+from django.conf import settings
+
 class LeaderboardListView(APIView):
     """
-    API View to retrieve leaderboard based on category, event, or status.
-    - If `category_id` is provided, the leaderboard is filtered by category.
-    - If `event_id` is provided, the leaderboard is filtered by event.
-    - Optionally, filter by `status_id`.
+    API View to retrieve leaderboard with a configurable limit from settings.
     """
     def get(self, request):
-        category_id = request.data.get('category_id')
-        event_id = request.data.get('event_id')
-        status_id = request.data.get('status_id')  # New filter
+        remuneration_type = request.data.get('remuneration_type')
+        test_type = request.data.get('test_type')
+
+        limit = getattr(settings, 'LEADERBOARD_LIMIT', 10)  # Default to 10 if not set in settings.py
 
         leaderboard_entries = Leaderboard.objects.all()
 
-        if category_id:
-            category = get_object_or_404(Category, id=category_id)
-            leaderboard_entries = leaderboard_entries.filter(category=category)
+        # Filter by remuneration type
+        if remuneration_type == "1":
+            leaderboard_entries = leaderboard_entries.filter(category__isnull=False)
+        elif remuneration_type == "2":
+            leaderboard_entries = leaderboard_entries.filter(event__isnull=False)
+        else:
+            return Response({"error": "Invalid 'remuneration_type'."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if event_id:
-            event = get_object_or_404(Event, id=event_id)
-            leaderboard_entries = leaderboard_entries.filter(event=event)
-
-        if status_id:
-            status_obj = get_object_or_404(Status, id=status_id)
+        # Map test_type to status names
+        test_type_mapping = {
+            "1": "preliminary",
+            "2": "intermediary",
+            "3": "reward",
+        }
+        status_name = test_type_mapping.get(str(test_type))
+        if status_name:
+            status_obj = get_object_or_404(Status, status=status_name)
             leaderboard_entries = leaderboard_entries.filter(status=status_obj)
+        elif test_type is not None:
+            return Response({"error": "Invalid 'test_type'."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not category_id and not event_id:
-            return Response({"error": "Please provide at least 'category_id' or 'event_id'."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Order by score and serialize
-        leaderboard_entries = leaderboard_entries.order_by('-score')
+        # Apply limit and serialize
         leaderboard_data = [
             {
                 "msisdn": entry.msisdn,
                 "score": entry.score,
-                "status": entry.status.status if entry.status else None,  # Include status info
-                "category": entry.category.name if entry.category else None,  # Optional category name
-                "event": entry.event.name if entry.event else None  # Optional event name
-            } for entry in leaderboard_entries
+                "status": entry.status.status if entry.status else None,
+                "remuneration_type": remuneration_type,
+                "test_type": status_name,
+                "category": entry.category.name if entry.category else None,
+                "event": entry.event.name if entry.event else None,
+            } for entry in leaderboard_entries.order_by('-score')[:limit]
         ]
 
-        return Response({"leaderboard": leaderboard_data}, status=status.HTTP_200_OK)
+        return Response({"leaderboard": leaderboard_data})
 
         
 
@@ -585,7 +592,7 @@ class upload_questions(APIView):
                 for _, row in df.iterrows():
                     question_text = row['Question']
                     options = [row['Option1'], row['Option2'], row['Option3'], row['Option4']]
-                    correct_answer = row['Answer'].strip().lower()
+                    correct_answer = row['Answer'].strip().lower().replace(" ", "")
                     subject_name = row['Subject']
                     section_name = row['Section']
                     category_name = row['Category']
@@ -622,13 +629,13 @@ class upload_questions(APIView):
                     # Create Question Options
                     for i, option_text in enumerate(options, start=1):
                     # Ensure option_text is treated as a string
-                        option_text = str(option_text).strip().lower()
+                        option_text = str(option_text).lower()
                         
                         # Determine the label for the option
-                        option_label = f"option {i}".lower()
+                        # option_label = f"option {i}".lower()
                         
                         # Check if the current option is the correct answer
-                        is_correct = (option_label == correct_answer.strip().lower()) or (option_text == correct_answer.strip().lower())
+                        is_correct = (f"option{i}".strip().lower() == correct_answer)
                         
                         # Create the QuestionOption object
                         QuestionOption.objects.create(
