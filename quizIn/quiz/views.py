@@ -433,88 +433,67 @@ class EventViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='submit')
     def submit_exam(self, request):
-        msisdn = request.data.get('msisdn')  # Mobile number or any identifier for the user
-        event_id = request.data.get('event_id')  # event_id can be provided directly
+        msisdn = request.data.get('msisdn')
+        event_id = request.data.get('event_id')
         category_id = request.data.get('category_id')
         section_id = request.data.get('section_id')
         subject_id = request.data.get('subject_id')
-        start_time = request.data.get('start_time')  # You may also validate the datetime format here
+        start_time = request.data.get('start_time')
         end_time = request.data.get('end_time')
 
-        # Validate required fields
+        # Validate inputs (as before)
         if not msisdn:
             return Response({"error": "MSISDN is required."}, status=status.HTTP_400_BAD_REQUEST)
-        
         if not (event_id or (category_id and section_id and subject_id)):
             return Response({"error": "Either event_id or category_id, section_id, and subject_id must be provided."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        if not start_time or not end_time:
-            return Response({"error": "Start time and End time are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Validate start_time and end_time are in the correct format (datetime)
+        # Validate start_time and end_time
         try:
             start_time = timezone.make_aware(datetime.strptime(start_time, '%Y-%m-%dT%H:%M:%S'))
             end_time = timezone.make_aware(datetime.strptime(end_time, '%Y-%m-%dT%H:%M:%S'))
         except ValueError:
             return Response({"error": "Invalid date format. Use YYYY-MM-DDTHH:MM:SS."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Fetch event (exam_type) if event_id is provided
+        # Fetch the event or category (as before)
         if event_id:
             try:
                 event = Event.objects.get(id=event_id)
             except Event.DoesNotExist:
                 return Response({"error": "Event does not exist."}, status=status.HTTP_404_NOT_FOUND)
         else:
-            # Handle filtering by category_id, section_id, and subject_id
-            if not (category_id and section_id and subject_id):
-                return Response({"error": "Category, Section, and Subject IDs must all be provided when event_id is not given."}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Fetch the related Category, Section, and Subject
-            try:
-                subject = get_object_or_404(Subject, id=subject_id)
-                section = get_object_or_404(Section, id=section_id, subject=subject)
-                category = get_object_or_404(Category, id=category_id, section=section)
-            except (Subject.DoesNotExist, Section.DoesNotExist, Category.DoesNotExist) as e:
-                return Response({"error": f"{str(e)} not found."}, status=status.HTTP_404_NOT_FOUND)
-
-            # Now, query the questions based on these relationships
+            subject = get_object_or_404(Subject, id=subject_id)
+            section = get_object_or_404(Section, id=section_id, subject=subject)
+            category = get_object_or_404(Category, id=category_id, section=section)
             questions = Question.objects.filter(category=category)
 
             if not questions.exists():
-                return Response({"error": "No questions found for the provided category, section, and subject."}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"error": "No questions found for the provided category."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Fetch or create user status based on msisdn (phone number)
-        user_status = get_object_or_404(UserStatus, msisdn=msisdn)
-
-        # Store the user's answers and calculate their score
+        # Calculate the total score
         total_score = 0
         for question in questions:
-            answer = request.data.get(str(question.id))  # Get the answer for each question by ID
+            answer = request.data.get(str(question.id))
             if answer:
-                # Assuming 'answer' is a list of selected options
                 correct_options = question.options.filter(is_correct=True)
                 selected_options = QuestionOption.objects.filter(id__in=answer)
-
-                # Check if all selected options are correct
                 if all(option in correct_options for option in selected_options):
                     total_score += question.marks
 
-        # Update user points based on the exam submission
-        for question in questions:
-            answer = request.data.get(str(question.id))  # Get the answer for each question
-            if answer:
-                is_correct = str(question.id) in answer  # Check if the answer matches the correct answer
-                user_status.add_points(is_correct)
+        # Update or create a leaderboard entry
+        try:
+            status = UserStatus.objects.get(msisdn=msisdn).status  # Assuming status is part of UserStatus
+            if event_id:
+                Leaderboard.update_best_score(msisdn=msisdn, score=total_score, event=event, status=status)
+            else:
+                Leaderboard.update_best_score(msisdn=msisdn, score=total_score, category=category, status=status)
+        except UserStatus.DoesNotExist:
+            return Response({"error": "User status not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Check if the user needs to move to the next status
-        user_status.check_for_status_update()
-
-        # Return success message with the score
+        # Return response
         return Response({
             "message": "Exam submitted successfully.",
             "score": total_score,
         }, status=status.HTTP_200_OK)
-        
         
 class QuestionViewSet(viewsets.ModelViewSet):
     queryset = Question.objects.all()
